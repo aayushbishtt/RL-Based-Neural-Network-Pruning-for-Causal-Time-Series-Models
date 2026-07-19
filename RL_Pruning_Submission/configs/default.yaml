@@ -1,0 +1,157 @@
+# =============================================================================
+# RL-Based Neural Network Pruning for Causal Chamber Wind Tunnel Data
+# Configuration File
+# =============================================================================
+
+# Random seed for reproducibility
+seed: 42
+
+# =============================================================================
+# Data Configuration
+# =============================================================================
+data:
+  # Causal Chamber dataset settings
+  dataset_name: "lt_camera_walks_v1"  # Wind tunnel experiment dataset
+
+  # Features to use as inputs (sensors)
+  input_features:
+    - "red"           # Red light intensity
+    - "green"         # Green light intensity
+    - "blue"          # Blue light intensity
+    - "current"       # Current measurement
+    - "voltage"       # Voltage measurement
+
+  # Target variable to predict
+  target_feature: "pol_1"  # Polarizer angle or other target
+
+  # Time series parameters
+  sequence_length: 50      # Number of timesteps to look back
+  prediction_horizon: 1    # Steps ahead to predict
+
+  # Data split ratios
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+  # Batch size for training
+  batch_size: 64
+
+  # Number of workers for data loading
+  num_workers: 4
+
+# =============================================================================
+# Base Model Configuration (Time Series Forecasting Model to be Pruned)
+# =============================================================================
+base_model:
+  # Model type: "tcn" (Temporal Convolutional Network) or "lstm"
+  type: "tcn"
+
+  # TCN specific parameters
+  tcn:
+    num_channels: [32, 64, 64, 32]  # Channels per layer
+    kernel_size: 3
+    dropout: 0.2
+
+  # LSTM specific parameters
+  lstm:
+    hidden_size: 64
+    num_layers: 2
+    dropout: 0.2
+    bidirectional: false
+
+  # Training parameters for base model
+  training:
+    epochs: 100
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    scheduler: "cosine"  # "cosine", "step", or "none"
+    early_stopping_patience: 10
+
+# =============================================================================
+# Pruning Configuration
+# =============================================================================
+pruning:
+  # Pruning method: "magnitude", "structured", "filter"
+  method: "structured"
+
+  # Available pruning ratios (discrete action space)
+  pruning_ratios: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+
+  # Minimum remaining parameters (safety threshold)
+  min_remaining_ratio: 0.1
+
+  # Fine-tuning epochs after pruning each layer
+  finetune_epochs: 5
+
+# =============================================================================
+# RL Environment Configuration
+# =============================================================================
+environment:
+  # State representation
+  state_features:
+    - "layer_index"           # Current layer being pruned
+    - "layer_params"          # Number of parameters in layer
+    - "layer_flops"           # FLOPs of the layer
+    - "cumulative_sparsity"   # Current overall sparsity
+    - "current_val_loss"      # Validation loss after pruning
+    - "original_val_loss"     # Original model validation loss
+
+  # Reward function weights
+  reward:
+    # R = -alpha * accuracy_drop - beta * (1 - compression_ratio) + gamma * interventional_robustness
+    alpha: 1.0              # Weight for accuracy preservation
+    beta: 0.5               # Weight for compression
+    gamma: 0.3              # Weight for causal/interventional robustness
+
+  # Episode termination
+  max_steps_per_episode: 10  # Max layers to prune
+
+# =============================================================================
+# RL Agent Configuration
+# =============================================================================
+agent:
+  # Agent type: "q_learning", "dqn", "ppo"
+  type: "dqn"
+
+  # Q-Learning parameters
+  q_learning:
+    learning_rate: 0.1
+    discount_factor: 0.99
+    epsilon_start: 1.0
+    epsilon_end: 0.01
+    epsilon_decay: 0.995
+
+  # DQN parameters
+  dqn:
+    learning_rate: 0.0001
+    discount_factor: 0.99
+    epsilon_start: 1.0
+    epsilon_end: 0.01
+    epsilon_decay_steps: 10000
+    batch_size: 32
+    buffer_size: 10000
+    target_update_freq: 100
+    hidden_sizes: [128, 128]
+
+  # Training parameters
+  training:
+    num_episodes: 500
+    eval_frequency: 10
+    save_frequency: 50
+
+# =============================================================================
+# Logging and Checkpointing
+# =============================================================================
+logging:
+  log_dir: "logs"
+  tensorboard: true
+  save_checkpoints: true
+  checkpoint_dir: "checkpoints"
+  verbose: true
+
+# =============================================================================
+# Hardware Configuration
+# =============================================================================
+hardware:
+  device: "auto"  # "auto", "cuda", "mps", or "cpu"
+  precision: "float32"  # "float32" or "float16"

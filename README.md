@@ -246,4 +246,4 @@ MIT License
 
 ## Author
 
-[Your Name]
+[Aayush BISHT]
